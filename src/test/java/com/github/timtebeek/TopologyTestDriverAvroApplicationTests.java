@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TopologyTestDriverAvroApplicationTests {
 
-	TopologyTestDriver testDriver;
+	private TopologyTestDriver testDriver;
 
 	private TestInputTopic<String, User> usersTopic;
 	private TestOutputTopic<String, User> redUsersTopic;
