@@ -1,5 +1,6 @@
 package com.github.timtebeek;
 
+import example.avro.Color;
 import example.avro.User;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -18,11 +19,12 @@ public class TopologyTestDriverAvroApplication {
 
 	@Bean
 	public KStream<String, User> handleStream(StreamsBuilder builder) {
-		KStream<String, User> stream = builder.stream("users-topic");
-		stream
-				.filter((name, user) -> "red".equals(user.getFavoriteColor()))
-				.to("red-users-topic");
-		return stream;
+		KStream<String, User> userStream = builder.stream("users-topic");
+		KStream<String, Color> colorStream = userStream
+				.filter((username, user) -> !"blue".equals(user.getFavoriteColor()))
+				.mapValues((username, user) -> new Color(user.getFavoriteColor()));
+		colorStream.to("colors-topic");
+		return userStream;
 	}
 
 }
