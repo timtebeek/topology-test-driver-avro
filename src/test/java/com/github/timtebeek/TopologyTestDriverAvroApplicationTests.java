@@ -7,7 +7,6 @@ import example.avro.Color;
 import example.avro.User;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.serialization.Serde;
@@ -90,11 +89,7 @@ class TopologyTestDriverAvroApplicationTests {
 
 		public MockSchemaRegistryAvroSerde() {
 			super(schemaRegistry);
-
-			// Deserialize to SpecificRecord User rather than GenericRecord
-			configure(Map.of(
-					AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234",
-					KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true), false);
+			configure(Map.of(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234"), false);
 		}
 	}
 }
