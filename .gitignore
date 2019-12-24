@@ -12,6 +12,7 @@ target/
 .settings
 .springBeans
 .sts4-cache
+.attach_pid*
 
 ### IntelliJ IDEA ###
 .idea
@@ -29,3 +30,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
+### Project ###
+users.avro

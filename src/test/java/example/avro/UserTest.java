@@ -20,7 +20,7 @@ class UserTest {
 
 	// As per: https://avro.apache.org/docs/current/gettingstartedjava.html
 	@Test
-	void testSerializationSpecific() throws IOException {
+	void testSpecific() throws IOException {
 		User user1 = new User();
 		user1.setName("Alyssa");
 		user1.setFavoriteNumber(256);
