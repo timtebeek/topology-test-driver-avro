@@ -10,16 +10,24 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.streams.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TopologyTestDriverAvroApplicationTests {
 
-	@Test
-	void handleStream() throws Exception {
+	TopologyTestDriver testDriver;
+
+	private TestInputTopic<String, User> usersTopic;
+	private TestOutputTopic<String, User> redUsersTopic;
+
+	@BeforeEach
+	void beforeEach() {
 		// Create topology to handle stream of users
 		StreamsBuilder builder = new StreamsBuilder();
 		new TopologyTestDriverAvroApplication().handleStream(builder);
@@ -33,28 +41,39 @@ class TopologyTestDriverAvroApplicationTests {
 		props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, UserAvroSerde.class);
 		props.put(SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234");
 
-		// Create test driver for tests
-		try (TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-				Serde<String> stringSerde = Serdes.String();
-				Serde<User> avroUserSerde = new UserAvroSerde()) {
+		// Create topology and serdes used for topics
+		testDriver = new TopologyTestDriver(topology, props);
+		Serde<String> stringSerde = Serdes.String();
+		Serde<User> avroUserSerde = new UserAvroSerde();
 
-			// Create input topic
-			TestInputTopic<String, User> inputTopic = testDriver.createInputTopic(
-					"users-topic",
-					stringSerde.serializer(),
-					avroUserSerde.serializer());
+		// Define input and output topics to use in tests
+		usersTopic = testDriver.createInputTopic(
+				"users-topic",
+				stringSerde.serializer(),
+				avroUserSerde.serializer());
+		redUsersTopic = testDriver.createOutputTopic(
+				"red-users-topic",
+				stringSerde.deserializer(),
+				avroUserSerde.deserializer());
+	}
 
-			// Read from output topic
-			TestOutputTopic<String, User> outputTopic = testDriver.createOutputTopic(
-					"red-users-topic",
-					stringSerde.deserializer(),
-					avroUserSerde.deserializer());
+	@AfterEach
+	void afterEach() {
+		testDriver.close();
+	}
 
-			// Push first user onto input topic
-			User alice = new User("Alice", 7, "red");
-			inputTopic.pipeInput("Alice", alice);
-			assertEquals(alice, outputTopic.readValue());
-		}
+	@Test
+	void handleRedUser() throws Exception {
+		User user = new User("Alice", 7, "red");
+		usersTopic.pipeInput("Alice", user);
+		assertEquals(user, redUsersTopic.readValue());
+	}
+
+	@Test
+	void handleBlueUser() throws Exception {
+		User user = new User("Bob", 14, "blue");
+		usersTopic.pipeInput("Bob", user);
+		assertTrue(redUsersTopic.isEmpty());
 	}
 
 	public static class UserAvroSerde extends SpecificAvroSerde<User> {
