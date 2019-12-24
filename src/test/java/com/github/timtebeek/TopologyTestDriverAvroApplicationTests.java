@@ -5,6 +5,8 @@ import java.util.Properties;
 
 import example.avro.User;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -14,8 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
-import static io.confluent.kafka.serializers.KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,10 +39,12 @@ class TopologyTestDriverAvroApplicationTests {
 		props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
 		props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class);
 		props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, UserAvroSerde.class);
-		props.put(SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234");
+		props.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234");
 
-		// Create topology and serdes used for topics
+		// Create test driver
 		testDriver = new TopologyTestDriver(topology, props);
+
+		// Create Serdes used for test record keys and values
 		Serde<String> stringSerde = Serdes.String();
 		Serde<User> avroUserSerde = new UserAvroSerde();
 
@@ -63,28 +65,33 @@ class TopologyTestDriverAvroApplicationTests {
 	}
 
 	@Test
-	void handleRedUser() throws Exception {
+	void shouldPropagateUserWithFavoriteColorRed() throws Exception {
 		User user = new User("Alice", 7, "red");
 		usersTopic.pipeInput("Alice", user);
 		assertEquals(user, redUsersTopic.readValue());
 	}
 
 	@Test
-	void handleBlueUser() throws Exception {
+	void shouldNotPropagateUserWithFavoriteColorBlue() throws Exception {
 		User user = new User("Bob", 14, "blue");
 		usersTopic.pipeInput("Bob", user);
 		assertTrue(redUsersTopic.isEmpty());
 	}
 
+	/**
+	 * {@link SpecificAvroSerde} for {@link User}. Contains a {@link MockSchemaRegistryClient} shared between all
+	 * instances; needed since both our topology as well as our input and output topics need an instance.
+	 */
 	public static class UserAvroSerde extends SpecificAvroSerde<User> {
 		private static final MockSchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
 
 		public UserAvroSerde() {
 			super(schemaRegistry);
+
+			// Deserialize to SpecificRecord User rather than GenericRecord
 			configure(Map.of(
-					SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234",
-					// Deserialize to SpecificRecord rather than GenericRecord
-					SPECIFIC_AVRO_READER_CONFIG, true), false);
+					AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:1234",
+					KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true), false);
 		}
 	}
 }
