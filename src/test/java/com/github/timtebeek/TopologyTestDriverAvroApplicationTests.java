@@ -5,7 +5,6 @@ import java.util.Properties;
 
 import example.avro.Color;
 import example.avro.User;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
@@ -36,9 +35,6 @@ class TopologyTestDriverAvroApplicationTests {
 		StreamsBuilder builder = new StreamsBuilder();
 		new TopologyTestDriverAvroApplication().handleStream(builder);
 		Topology topology = builder.build();
-
-		// Create a mock schema registry shared between SpecificAvroSerde instances
-		SchemaRegistryClient schemaRegistryClient = MockSchemaRegistry.getClientForScope(SCHEMA_REGISTRY_SCOPE);
 
 		// Dummy properties needed for test diver
 		Properties props = new Properties();
