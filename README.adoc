@@ -1,0 +1,146 @@
+= Kafka Streams TopologyTestDriver with Avro
+
+Companion project to my https://github.com/timtebeek/topology-test-driver-avro/blob/master/src/test/java/com/github/timtebeek/TopologyTestDriverAvroApplicationTests.java[company blog post].
+
+The December 2019 https://www.apache.org/dist/kafka/2.4.0/RELEASE_NOTES.html[release of Apache Kafka 2.4.0] saw https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements[usability improvements in TopologyTestDriver], with the addition of new `TestInputTopic` and `TestOutputTopic` classes.
+These offer typesafe methods to easily produce and consume messages for your Kafka Streams tests. 
+In this post we'll explore these new classes in the context of Avro messages, which requires a small trick to get working.
+
+In short we'll start by defining two Avro contracts; create a Kafka Streams application that consumes one type on an input topic, and conditionally produces a second type on an output topic; then we'll wire up our tests to verify the stream processing behaviour. The complete example application is https://github.com/timtebeek/topology-test-driver-avro/blob/master/src/test/java/com/github/timtebeek/TopologyTestDriverAvroApplicationTests.java[available on Github].
+
+== Avro contracts
+
+https://avro.apache.org/docs/current/[Apache Avro] is a data serialization system that provides rich data structures in a compact, fast, binary data format.
+You define a schema in JSON, which is shared between the producer and consumer.
+This allows for the efficient serialization, transfer and storage of messages.
+When applied to Kafka this sees the addition of https://docs.confluent.io/current/schema-registry/index.html[Confluent Schema Registry], which facilitates the exchange of schemas, as well as schema evolution.
+You'll see this reflected in the tests later.
+
+=== Schema definition
+
+We follow along to https://avro.apache.org/docs/1.9.1/gettingstartedjava.html[Apache Avro Getting Started (Java)] to create two contracts, with the Avro Maven plugin configured to generate the associated Java classes.
+
+.user.avsc
+[source,json]
+----
+{"namespace": "example.avro",
+ "type": "record",
+ "name": "User",
+ "fields": [
+     {"name": "name", "type": "string"},
+     {"name": "favorite_number",  "type": ["int", "null"]},
+     {"name": "favorite_color", "type": ["string", "null"]}
+ ]
+}
+----
+
+.color.avsc
+[source,json]
+----
+{"namespace": "example.avro",
+ "type": "record",
+ "name": "Color",
+ "fields": [
+     {"name": "name", "type": "string"}
+ ]
+}
+----
+
+This results in two classes generated in `target/generated-sources/avro`, which you might need to add to your IDE build path.
+We've added two unit tests to https://github.com/timtebeek/topology-test-driver-avro/blob/master/src/test/java/example/avro/UserTest.java[demonstrate basic serialization and deserialization] of these Avro contracts in isolation.
+Note that this differs from typical and actual use in the context of an Kafka Streams application; It serves only as an illustration of two types of serialization.
+
+== Kafka Streams Application
+
+Next up we define a Kafka Streams application to consume and produce messages with the above Avro types.
+Through https://start.spring.io[start.spring.io] we bootstrap an application that uses both Spring Kafka and Kafka Streams.
+While we're still using Spring Boot 2.2, we have to override the managed Apache Kafka dependency versions, as https://spring.io/blog/2019/12/23/spring-for-apache-kafka-2-4-is-available[indicated in the release announcement].
+However, we diverge slightly from the approach mentioned in https://docs.spring.io/spring-kafka/docs/2.4.0.RELEASE/reference/html/#deps-for-24x[Appendix A], opting instead to customize the dependency versions https://docs.spring.io/spring-boot/docs/2.2.x/reference/html/howto.html#howto-customize-dependency-versions[through properties].
+
+.Kafka version override through properties
+[source,xml]
+----
+<properties>
+  <java.version>11</java.version>
+  <kafka.version>2.4.0</kafka.version>
+  <spring-kafka.version>2.4.0.RELEASE</spring-kafka.version>
+</properties>
+----
+
+
+Our full Kafka Streams application then only consists of a single class.
+We convert an input `users-topic` with users to an output `colors-topic` with the user's favorite color, provided that color is not `blue`.
+Note that this is a highly simplified Stream topology; You can build, and test, a lot more advanced operations such as joins and aggregations with ease.
+
+.TopologyTestDriverAvroApplication.java
+[source,java]
+----
+@SpringBootApplication
+@EnableKafkaStreams
+public class TopologyTestDriverAvroApplication {
+
+  public static void main(String[] args) {
+    SpringApplication.run(TopologyTestDriverAvroApplication.class, args);
+  }
+
+  @Bean
+  public KStream<String, User> handleStream(StreamsBuilder builder) {
+    KStream<String, User> userStream = builder.stream("users-topic");
+    KStream<String, Color> colorStream = userStream
+        .filter((username, user) -> !"blue".equals(user.getFavoriteColor()))
+        .mapValues((username, user) -> new Color(user.getFavoriteColor()));
+    colorStream.to("colors-topic");
+    return userStream;
+  }
+
+}
+----
+
+We use the following configuration properties to ensure the messages are (de)serialized correctly.
+
+.application.properties
+[source,properties]
+----
+spring.application.name=topology-test-driver-avro
+spring.kafka.streams.properties.default.key.serde=io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
+spring.kafka.streams.properties.default.value.serde=io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
+----
+
+== Testing Kafka Streams
+
+Now finally we've arrived at the target of this blog post: Testing a Kafka Streams application using the new `TestInputTopic` and `TestOutputTopic` classes.
+The basic test structure is already given in reference guide chapter https://kafka.apache.org/24/documentation/streams/developer-guide/testing#testing-topologytestdriver[Testing a Streams application], which consists of:
+
+. Creating a `Topology` through a `StreamsBuilder`;
+. Defining required application `Properties`;
+. Instantiate a new `TopologyTestDriver`;
+. Call `createInputTopic` with proper key/value serializers;
+. Call `createOutputTopic` with proper key/value deserializers;
+. Within unit tests
+ - pipe messages into input topics;
+ - read messages from output topics.
+
+While this test structure works fine with straightforward Serdes, there's a slight complication when it comes to Avro Serdes.
+As mentioned above, the Kafka Avro (de)serializers expect to call an instance of Confluent Schema Registry to exchange the Avro schemas.
+However, for our tests we do not want to have to run an instance of the Schema Registry as a packaged or external dependency.
+
+Luckily, we can configure our Avro (de)serializers with an alternative `SchemaRegistryClient` client in the form of `MockSchemaRegistryClient`, brought in through `kafka-schema-registry-client:5.3.2`.
+This is an in memory implementation for tests, which is not persistent nor shared across instances.
+Careful examination of the call structures around `TopologyTestDriver` tells us the driver will create it's own instances of the `Properties` configured Serdes, while both `createInputTopic` and `createOutputTopic` expect to be passed instances as well.
+This conflicts with the documented `MockSchemaRegistryClient` behaviour that schemas are not shared across instances!
+So, in order to share a `MockSchemaRegistryClient` between all Avro (de)serializer instances used in our tests, we have to use a workaround.
+
+Now originally I had subclassed `SpecificAvroSerde` to always use a single `static MockSchemaRegistryClient` instance.
+But after sharing my approach Matthias J. Sax was kind enough to point out https://twitter.com/MatthiasJSax/status/1210745000239058946[built-in support for a `mock://` pseudo-protocol], specifically to support testing.
+When you configure the same `mock://` URL in both the `Properties` passed into `TopologyTestDriver`, as well as for the (de)serializer instances passed into `createInputTopic` and `createOutputTopic`, all (de)serializers will use the same `MockSchemaRegistryClient`, with a single in memory schema store.
+
+Support for the `mock://` pseudo-protocol is achieved through https://github.com/confluentinc/schema-registry/blob/5.3.x/avro-serializer/src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerDe.java#L54[AbstractKafkaAvroSerDe], which recognizes mocked URLs and through `MockSchemaRegistry` holds a reusable `MockSchemaRegistryClient` in a map using the URL suffix as key.
+After your tests you can remove the mock registry client and associated schemas again through `MockSchemaRegistry#dropScope(String)`.
+
+https://github.com/timtebeek/topology-test-driver-avro/blob/master/src/test/java/com/github/timtebeek/TopologyTestDriverAvroApplicationTests.java[The test class can be seen in full here].
+
+== Conclusion
+
+Using the above approach we can easily unit test Kafka Streams applications which exchange Avro messages.
+Advanced testing functionality such as Wall-clock-time punctuations and accessing state stores are similarly available through TopologyTestDriver,
+allowing you to rapidly and easily test the full scope of your stream processing applications in a type safe manner.
