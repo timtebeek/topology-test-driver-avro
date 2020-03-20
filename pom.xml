@@ -15,8 +15,8 @@
 	<description>Demo project for Spring Boot</description>
 	<properties>
 		<java.version>11</java.version>
-		<kafka.version>2.4.0</kafka.version>
-		<spring-kafka.version>2.4.0.RELEASE</spring-kafka.version>
+		<kafka.version>2.4.1</kafka.version>
+		<spring-kafka.version>2.4.1.RELEASE</spring-kafka.version>
 	</properties>
 	<dependencies>
 		<dependency>
