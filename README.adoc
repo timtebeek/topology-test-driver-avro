@@ -62,8 +62,8 @@ However, we diverge slightly from the approach mentioned in https://docs.spring.
 ----
 <properties>
   <java.version>11</java.version>
-  <kafka.version>2.4.0</kafka.version>
-  <spring-kafka.version>2.4.0.RELEASE</spring-kafka.version>
+  <kafka.version>2.4.1</kafka.version>
+  <spring-kafka.version>2.4.1.RELEASE</spring-kafka.version>
 </properties>
 ----
 
