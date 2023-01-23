@@ -1,6 +1,6 @@
 = Kafka Streams TopologyTestDriver with Avro
 
-Companion project to my https://blog.jdriven.com/2019/12/kafka-streams-topologytestdriver-with-avro/[company blog post].
+Companion project to my https://blog.jdriven.com/2019/12/kafka-streams-topologytestdriver-with-avro/[JDriven blog post].
 
 The December 2019 https://www.apache.org/dist/kafka/2.4.0/RELEASE_NOTES.html[release of Apache Kafka 2.4.0] saw https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements[usability improvements in TopologyTestDriver], with the addition of new `TestInputTopic` and `TestOutputTopic` classes.
 These offer typesafe methods to easily produce and consume messages for your Kafka Streams tests. 
