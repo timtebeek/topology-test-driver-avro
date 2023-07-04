@@ -14,7 +14,7 @@
 	<name>tooplogy-test-driver-avro</name>
 	<description>Demo project for Spring Boot</description>
 	<properties>
-		<avro.version>1.11.1</avro.version>
+		<avro.version>1.11.2</avro.version>
 		<java.version>17</java.version>
 	</properties>
 	<dependencies>
